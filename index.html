@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MANZZ PARTICLE MODULE ✌️</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; color: #fff; font-family: 'Courier New', Courier, monospace; }
+        #status { position: absolute; top: 20px; left: 20px; z-index: 10; font-size: 14px; color: #0ff; text-shadow: 0 0 5px #0ff; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; border: 1px solid #0ff; }
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; }
+        video { display: none; }
+    </style>
+</head>
+<body>
+    <div id="loading">SISTEM GEMINI.EXE: LOADING MODULES...</div>
+    <div id="status">SENSOR: STANDBY</div>
+    <video id="input_video"></video>
+
+    <script type="module">
+        // 1. IMPORT MODULES
+        import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/0.161.0/three.module.js';
+        import { FontLoader } from 'https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/loaders/FontLoader.js';
+        import { TextGeometry } from 'https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/geometries/TextGeometry.js';
+
+        // Variables Global
+        let scene, camera, renderer, points, geometry;
+        let particleCount = 6000;
+        let currentHandState = 'opened';
+        const lerpFactor = 0.03;
+
+        const positions = new Float32Array(particleCount * 3);
+        const targetPositions = new Float32Array(particleCount * 3);
+        const currentPositions = new Float32Array(particleCount * 3);
+
+        let heartVertices = [], iLoveYouVertices = [], byManzzVertices = [];
+
+        // 2. INITIALIZE SCENE
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 30;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Create Initial Random Particles
+            for (let i = 0; i < particleCount * 3; i++) {
+                positions[i] = (Math.random() - 0.5) * 60;
+                currentPositions[i] = positions[i];
+                targetPositions[i] = positions[i];
+            }
+
+            geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(currentPositions, 3));
+
+            const material = new THREE.PointsMaterial({
+                color: 0x00ffff,
+                size: 0.12,
+                transparent: true,
+                blending: THREE.AddBlending,
+                depthWrite: false
+            });
+
+            points = new THREE.Points(geometry, material);
+            scene.add(points);
+
+            loadAssets();
+        }
+
+        // 3. LOAD ASSETS (Font & Forms)
+        function loadAssets() {
+            const loader = new FontLoader();
+            loader.load('https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/fonts/helvetiker_regular.typeface.json', (font) => {
+                // Generate Heart
+                for (let i = 0; i < particleCount; i++) {
+                    const t = Math.random() * Math.PI * 2;
+                    const x = 16 * Math.pow(Math.sin(t), 3);
+                    const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+                    heartVertices.push(new THREE.Vector3(x * 0.6, y * 0.6, (Math.random() - 0.5) * 5));
+                }
+
+                // Generate Texts
+                iLoveYouVertices = createTextPoints(font, 'I LOVE YOU', 3);
+                byManzzVertices = createTextPoints(font, 'BY MANZZ', 3.5);
+
+                document.getElementById('loading').style.display = 'none';
+                startMediaPipe();
+                animate();
+            });
+        }
+
+        function createTextPoints(font, text, size) {
+            const tGeo = new TextGeometry(text, { font: font, size: size, height: 0.2 });
+            tGeo.center();
+            const pos = tGeo.attributes.position.array;
+            const v = [];
+            for(let i=0; i<particleCount; i++) {
+                const idx = (i * 3) % pos.length;
+                v.push(new THREE.Vector3(pos[idx], pos[idx+1], pos[idx+2]));
+            }
+            return v;
+        }
+
+        // 4. MEDIAPIPE LOGIC (Hand Tracking)
+        async function startMediaPipe() {
+            const videoElement = document.getElementById('input_video');
+            const hands = new window.Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+            
+            hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5 });
+            hands.onResults(results => {
+                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                    const lm = results.multiHandLandmarks[0];
+                    const openFingers = [lm[8].y < lm[6].y, lm[12].y < lm[10].y, lm[16].y < lm[14].y, lm[20].y < lm[18].y].filter(v => v).length;
+                    
+                    if (openFingers === 0) currentHandState = 'closed';
+                    else if (openFingers === 2 && lm[8].y < lm[6].y && lm[12].y < lm[10].y) currentHandState = 'peace';
+                    else if (openFingers === 3) currentHandState = 'three';
+                    else if (openFingers === 4) currentHandState = 'four';
+                    else currentHandState = 'opened';
+
+                    document.getElementById('status').innerText = `SENSOR: ${currentHandState.toUpperCase()}`;
+                }
+            });
+
+            const camera = new window.Camera(videoElement, {
+                onFrame: async () => { await hands.send({image: videoElement}); },
+                width: 640, height: 480
+            });
+            camera.start();
+        }
+
+        // 5. ANIMATION LOOP
+        function animate() {
+            requestAnimationFrame(animate);
+
+            let target = null;
+            if (currentHandState === 'peace') target = heartVertices;
+            else if (currentHandState === 'three') target = iLoveYouVertices;
+            else if (currentHandState === 'four') target = byManzzVertices;
+
+            const posAttr = geometry.attributes.position.array;
+            for (let i = 0; i < particleCount; i++) {
+                const i3 = i * 3;
+                let tx, ty, tz;
+
+                if (target) {
+                    tx = target[i].x; ty = target[i].y; tz = target[i].z;
+                } else if (currentHandState === 'closed') {
+                    tx = 0; ty = 0; tz = 0;
+                } else {
+                    tx = positions[i3]; ty = positions[i3+1]; tz = positions[i3+2];
+                }
+
+                posAttr[i3] = THREE.MathUtils.lerp(posAttr[i3], tx, lerpFactor);
+                posAttr[i3+1] = THREE.MathUtils.lerp(posAttr[i3+1], ty, lerpFactor);
+                posAttr[i3+2] = THREE.MathUtils.lerp(posAttr[i3+2], tz, lerpFactor);
+            }
+
+            geometry.attributes.position.needsUpdate = true;
+            points.rotation.y += 0.002;
+            renderer.render(scene, camera);
+        }
+
+        init();
+    </script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+</body>
+</html>
