@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Manzz V-Coder - Particle OS Ultimate</title>
+    <title>Manzz V-Coder - Particle OS Full Web</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
         #status {
             position: absolute; top: 20px; left: 20px; color: #00ffff; z-index: 100;
-            background: rgba(0, 20, 20, 0.7); padding: 12px; border-left: 4px solid #00ffff;
-            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3); font-size: 12px;
+            background: rgba(0, 20, 20, 0.8); padding: 12px; border-left: 4px solid #00ffff;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3); font-size: 12px; pointer-events: none;
         }
         #landscape-msg {
             display: none; position: fixed; inset: 0; background: #000; color: #0ff;
@@ -22,8 +22,8 @@
 <body>
 
     <div id="landscape-msg">🔄 MOHON MIRINGKAN HP (LANDSCAPE)</div>
-    <div id="status">SISTEM: MENGHUBUNGKAN CORE...</div>
-    <video id="input_video"></video>
+    <div id="status">SISTEM: BOOTING V-CODER...</div>
+    <video id="input_video" playsinline></video>
 
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
@@ -45,7 +45,7 @@
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         document.body.appendChild(renderer.domElement);
@@ -89,20 +89,17 @@
             }
 
             for (let i = 0; i < BG_COUNT; i++) {
-                const r = 15 + Math.random() * 20;
+                const r = 12 + Math.random() * 18;
                 const angle = Math.random() * Math.PI * 2;
                 bgPos[i*3] = Math.cos(angle) * r;
-                bgPos[i*3+1] = (Math.random()-0.5) * 30;
+                bgPos[i*3+1] = (Math.random()-0.5) * 25;
                 bgPos[i*3+2] = Math.sin(angle) * r;
-                bgOrbitData.push({ radius: r, speed: 0.002 + Math.random() * 0.005, angle: angle });
+                bgOrbitData.push({ radius: r, speed: 0.003 + Math.random() * 0.005, angle: angle });
             }
 
             const ts = 0.09 * globalScale;
-            // Mode Hati (1 Jari & 2 Jari)
-            generateText("♡", targets.heart_hole, ts * 3.5); // Lubang
-            generateText("❤️", targets.heart_full, ts * 3.5); // Full
-            
-            // Mode Teks
+            generateText("♡", targets.heart_hole, ts * 3.8); 
+            generateText("❤️", targets.heart_full, ts * 3.8); 
             generateText("I LOVE YOU", targets.iloveyou, ts);
             generateText("BY MANZZ", targets.bymanzz, ts + 0.02);
             generateText("JANJI ?", targets.janji, ts + 0.02);
@@ -131,26 +128,31 @@
                 const p = pts[i % pts.length] || {x:0, y:0};
                 targetArray[i * 3] = p.x;
                 targetArray[i * 3 + 1] = p.y;
-                targetArray[i * 3 + 2] = (Math.random() - 0.5) * 2;
+                targetArray[i * 3 + 2] = (Math.random() - 0.5) * 1.5;
             }
         }
 
         initSystems();
 
         coreGeo.setAttribute('position', new THREE.BufferAttribute(corePos, 3));
-        const coreMat = new THREE.PointsMaterial({ color: 0x00ffff, size: 0.2, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+        const coreMat = new THREE.PointsMaterial({ color: 0x00ffff, size: 0.15, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
         const corePoints = new THREE.Points(coreGeo, coreMat);
         scene.add(corePoints);
 
         bgGeo.setAttribute('position', new THREE.BufferAttribute(bgPos, 3));
-        const bgMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.1, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending });
+        const bgMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.1, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
         const bgPoints = new THREE.Points(bgGeo, bgMat);
         scene.add(bgPoints);
 
         camera.position.z = 35;
 
-        const hands = new window.Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-        hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.75 });
+        // --- HANDS ENGINE ---
+        const hands = new window.Hands({ 
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` 
+        });
+
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+
         hands.onResults((results) => {
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                 const lm = results.multiHandLandmarks[0];
@@ -169,11 +171,24 @@
                 else if (count === 4) currentMode = "bymanzz";
                 else currentMode = "spread";
 
-                statusElement.innerText = `MANZZ OS: ${currentMode.replace('_',' ').toUpperCase()}`;
+                statusElement.innerText = `MANZZ OS: ${currentMode.toUpperCase()}`;
             } else { statusElement.innerText = "MANZZ OS: MENCARI TANGAN..."; }
         });
 
-        new window.Camera(videoElement, { onFrame: async () => { await hands.send({image: videoElement}); }, width: 640, height: 480 }).start();
+        // --- WEB STARTUP ENGINE ---
+        const cam = new window.Camera(videoElement, {
+            onFrame: async () => {
+                if (hands) await hands.send({ image: videoElement });
+            },
+            width: 640, height: 480
+        });
+
+        // Pastikan dijalankan saat Window benar-benar Load
+        window.onload = () => {
+            cam.start()
+                .then(() => statusElement.innerText = "SISTEM: AKTIF & SCANNING")
+                .catch(err => statusElement.innerText = "SISTEM: IZIN KAMERA DITOLAK");
+        };
 
         function animate() {
             requestAnimationFrame(animate);
@@ -183,25 +198,23 @@
             const tData = targets[currentMode];
 
             if (currentMode === "spread") {
-                corePoints.rotation.y += 0.006;
-                corePoints.rotation.x += 0.002;
+                corePoints.rotation.y += 0.005;
             } else {
-                corePoints.rotation.y *= 0.92; 
-                corePoints.rotation.x *= 0.92;
+                corePoints.rotation.y *= 0.9; 
             }
 
             for (let i = 0; i < CORE_COUNT; i++) {
                 let i3 = i * 3;
                 if (currentMode !== "spread") {
                     const wave = Math.sin(time + i * 0.1) * 0.08;
-                    corePosAttr.array[i3] += (tData[i3] - corePosAttr.array[i3]) * 0.12 + wave;
-                    corePosAttr.array[i3+1] += (tData[i3+1] - corePosAttr.array[i3+1]) * 0.12 + wave;
-                    corePosAttr.array[i3+2] += (tData[i3+2] - corePosAttr.array[i3+2]) * 0.12 + wave;
+                    corePosAttr.array[i3] += (tData[i3] - corePosAttr.array[i3]) * 0.15 + wave;
+                    corePosAttr.array[i3+1] += (tData[i3+1] - corePosAttr.array[i3+1]) * 0.15 + wave;
+                    corePosAttr.array[i3+2] += (tData[i3+2] - corePosAttr.array[i3+2]) * 0.15 + wave;
                 } else {
                     corePosAttr.array[i3] += coreVelo[i3];
                     corePosAttr.array[i3+1] += coreVelo[i3+1];
                     corePosAttr.array[i3+2] += coreVelo[i3+2];
-                    if (Math.abs(corePosAttr.array[i3]) > 28) corePosAttr.array[i3] *= -0.85;
+                    if (Math.abs(corePosAttr.array[i3]) > 30) corePosAttr.array[i3] *= -0.8;
                 }
             }
 
@@ -222,7 +235,6 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-            initSystems();
         });
     </script>
 </body>
