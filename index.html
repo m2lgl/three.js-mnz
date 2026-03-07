@@ -2,129 +2,217 @@
 <html lang="id">
 <head>
     <meta charset="UTF-8">
-    <title>Hand Sensor - Saturn Particles</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MANZZ PARTICLE CONTROL ✌️</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; font-family: sans-serif; }
-        #status {
-            position: absolute; top: 20px; left: 20px; color: white;
-            z-index: 10; pointer-events: none; text-shadow: 2px 2px 4px #000;
-        }
+        body { margin: 0; overflow: hidden; background: #000; color: #fff; font-family: sans-serif; }
         canvas { display: block; }
-        video { transform: scaleX(-1); } /* Mirror video */
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.5em; text-align: center; }
+        #status { position: absolute; bottom: 20px; left: 20px; font-size: 1.2em; text-shadow: 0 0 5px #0ff; }
     </style>
 </head>
 <body>
+    <div id="loading">Memuat Library & Font...<br>(Ini mungkin agak lama)</div>
+    <div id="status">Status Tangan: Standby...</div>
+    <video id="input_video" style="display:none;"></video>
 
-    <div id="status">Menginisialisasi Kamera dan Sensor...</div>
-    <video id="input_video" style="display:none"></video>
-
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.158.0/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.161.0/examples/js/loaders/FontLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.161.0/examples/js/geometries/TextGeometry.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
     <script>
-        const videoElement = document.getElementById('input_video');
-        const statusElement = document.getElementById('status');
-        
-        let isHandOpen = true;
-        const PARTICLE_COUNT = 2000; // Mulai dari 50rb dulu agar lancar
+        const statusEl = document.getElementById('status');
+        const loadingEl = document.getElementById('loading');
+        let currentHandState = 'opened'; // opened, closed, peace, three, four
+        let lerpFactor = 0.02; // Smooth transition speed
 
-        // --- 1. SETUP THREE.JS ---
+        // === 2. Setup Three.js (3D Scene) ===
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 25;
+
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // Inisialisasi Partikel
+        // === 3. Membuat Sistem Partikel (5000 titik) ===
+        const particleCount = 5000;
         const geometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(PARTICLE_COUNT * 3);
-        const velocities = new Float32Array(PARTICLE_COUNT * 3);
-        const targetPositions = new Float32Array(PARTICLE_COUNT * 3);
+        const positions = new Float32Array(particleCount * 3);
+        const targetPositions = new Float32Array(particleCount * 3); // Posisi tujuan (bentuk)
+        const currentPositions = new Float32Array(particleCount * 3); // Posisi animasi saat ini
 
-        for (let i = 0; i < PARTICLE_COUNT; i++) {
-            // Posisi Awal Acak
-            positions[i * 3] = (Math.random() - 0.5) * 10;
-            positions[i * 3 + 1] = (Math.random() - 0.5) * 10;
-            positions[i * 3 + 2] = (Math.random() - 0.5) * 10;
-
-            // Kecepatan Acak
-            velocities[i * 3] = (Math.random() - 0.5) * 0.1;
-            velocities[i * 3 + 1] = (Math.random() - 0.5) * 0.1;
-            velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.1;
-
-            // Target Saturnus (Cincin)
-            const angle = Math.random() * Math.PI * 2;
-            const radius = 3 + Math.random() * 2;
-            targetPositions[i * 3] = Math.cos(angle) * radius;
-            targetPositions[i * 3 + 1] = (Math.random() - 0.5) * 0.2; // Tipis vertikal
-            targetPositions[i * 3 + 2] = Math.sin(angle) * radius;
+        // Posisi awal acak
+        for (let i = 0; i < particleCount * 3; i++) {
+            positions[i] = (Math.random() - 0.5) * 50;
+            currentPositions[i] = positions[i]; // Sinkronkan
+            targetPositions[i] = positions[i]; // Sinkronkan
         }
 
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        const material = new THREE.PointsMaterial({ color: 0x00ccff, size: 0.02, transparent: true });
+        geometry.setAttribute('position', new THREE.BufferAttribute(currentPositions, 3));
+
+        const material = new THREE.PointsMaterial({
+            color: 0x00ffff,
+            size: 0.15,
+            transparent: true,
+            blending: THREE.AddBlending,
+            depthWrite: false
+        });
+
         const points = new THREE.Points(geometry, material);
         scene.add(points);
 
-        camera.position.z = 10;
-        camera.position.y = 5;
-        camera.lookAt(0,0,0);
+        // === 4. Logika "Memahat" Bentuk (Shape Mathematics) ===
+        let heartVertices = [];
+        let iLoveYouVertices = [];
+        let byManzzVertices = [];
 
-        // --- 2. SETUP MEDIAPIPE ---
+        // --- A. Fungsi Rumus Hati 3D Sederhana ---
+        function generateHeartShape() {
+            let v = [];
+            for (let i = 0; i < particleCount; i++) {
+                const t = Math.random() * Math.PI * 2;
+                // Rumus matematika bentuk hati 2D diproyeksikan ke 3D
+                const x = 16 * Math.pow(Math.sin(t), 3);
+                const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+                const z = (Math.random() - 0.5) * 5; // Beri sedikit ketebalan
+                v.push(new THREE.Vector3(x * 0.5, y * 0.5, z)); // Skala down
+            }
+            return v;
+        }
+
+        // --- B. Fungsi Membuat Bentuk Teks (Butuh Font JSON) ---
+        function generateTextShape(font, text, size = 3) {
+            const textGeo = new THREE.TextGeometry(text, { font: font, size: size, height: 0.5 });
+            textGeo.computeBoundingBox();
+            textGeo.center(); // Tengahkan teks
+
+            // Ambil vertex dari geometri teks asli
+            const textPoints = [];
+            const textPos = textGeo.attributes.position.array;
+            for(let i=0; i<textPos.length; i+=3) {
+                textPoints.push(new THREE.Vector3(textPos[i], textPos[i+1], textPos[i+2]));
+            }
+
+            // Sampler: Distribusikan partikel kita ke posisi teks tersebut
+            const v = [];
+            for(let i=0; i<particleCount; i++) {
+                v.push(textPoints[i % textPoints.length].clone());
+            }
+            return v;
+        }
+
+        // === 5. Load Font & Generate Bentuk ===
+        const fontLoader = new THREE.FontLoader();
+        // Pakai Font JSON minimalis dari CDN agar full JS
+        fontLoader.load('https://cdn.jsdelivr.net/gh/mrdoob/three.js@dev/examples/fonts/helvetiker_regular.typeface.json', (font) => {
+            console.log('Font Loaded!');
+            heartVertices = generateHeartShape();
+            iLoveYouVertices = generateTextShape(font, 'I LOVE YOU', 2.5);
+            byManzzVertices = generateTextShape(font, 'BY MANZZ', 3);
+            
+            loadingEl.style.display = 'none'; // Sembunyikan loading
+            startCamera(); // Mulai kamera setelah semua siap
+        });
+
+        // === 6. Setup MediaPipe Hands ===
+        const videoElement = document.getElementById('input_video');
+
         function onResults(results) {
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const hand = results.multiHandLandmarks[0];
-                
-                // Logic sederhana: bandingkan tinggi telunjuk (8) dengan pangkalnya (6)
-                // Y di MediaPipe terbalik (0 di atas, 1 di bawah)
-                const indexFingerOpen = hand[8].y < hand[6].y;
-                const middleFingerOpen = hand[12].y < hand[10].y;
-
-                isHandOpen = indexFingerOpen || middleFingerOpen;
-                statusElement.innerText = isHandOpen ? "STATUS: TANGAN TERBUKA (MENYEBAR)" : "STATUS: MENGEPAL (SATURNUS)";
-                statusElement.style.color = isHandOpen ? "#00ff00" : "#ffcc00";
+                const landmarks = results.multiHandLandmarks[0]; // Ambil tangan pertama
+                detectGesture(landmarks);
+            } else {
+                currentHandState = 'none';
+                statusEl.innerText = 'Status Tangan: Tidak terdeteksi';
             }
         }
 
-        const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-        });
-        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5 });
+        // --- Logika Deteksi Jari (Gesture) ---
+        function detectGesture(lm) {
+            // Logika sederhana: Cek apakah ujung jari (8, 12, 16, 20) di atas sendi (6, 10, 14, 18)
+            const indexOpen = lm[8].y < lm[6].y;
+            const middleOpen = lm[12].y < lm[10].y;
+            const ringOpen = lm[16].y < lm[14].y;
+            const pinkyOpen = lm[20].y < lm[18].y;
+            const thumbOpen = lm[4].x < lm[2].x; // Jempol agak beda (cek sumbu x)
+
+            // Hitung jari yang terbuka (kecuali jempol biar gampang)
+            const openFingers = [indexOpen, middleOpen, ringOpen, pinkyOpen].filter(v => v).length;
+
+            if (openFingers === 0) {
+                currentHandState = 'closed'; // Kepalan
+                statusEl.innerText = 'Status Tangan: MENYUSUT (Tertutup)';
+            } else if (openFingers === 2 && indexOpen && middleOpen) {
+                currentHandState = 'peace'; // Simbol Peace ✌️
+                statusEl.innerText = 'Status Tangan: HATI (Peace ✌️)';
+            } else if (openFingers === 3 && indexOpen && middleOpen && ringOpen) {
+                currentHandState = 'three'; // 3 Jari
+                statusEl.innerText = 'Status Tangan: I LOVE YOU (3 Jari)';
+            } else if (openFingers === 4) {
+                currentHandState = 'four'; // 4 Jari
+                statusEl.innerText = 'Status Tangan: BY MANZZ (4 Jari)';
+            } else if (openFingers >= 4 || (thumbOpen && indexOpen)) {
+                currentHandState = 'opened'; // Terbuka penuh
+                statusEl.innerText = 'Status Tangan: MENYEBAR (Terbuka)';
+            }
+        }
+
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
         hands.onResults(onResults);
 
-        const cam = new Camera(videoElement, {
-            onFrame: async () => { await hands.send({ image: videoElement }); },
-            width: 640, height: 480
-        });
-        cam.start();
+        function startCamera() {
+            const cameraMp = new Camera(videoElement, {
+                onFrame: async () => { await hands.send({image: videoElement}); },
+                width: 640, height: 480
+            });
+            cameraMp.start();
+        }
 
-        // --- 3. ANIMATION LOOP ---
+        // === 7. Animation Loop (Update Partikel & Animasi) ===
         function animate() {
             requestAnimationFrame(animate);
 
-            const posAttr = geometry.attributes.position;
-            
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                let ix = i * 3, iy = i * 3 + 1, iz = i * 3 + 2;
+            // Update target positions berdasarkan state tangan saat ini
+            let currentTarget = null;
+            if (currentHandState === 'peace') currentTarget = heartVertices;
+            else if (currentHandState === 'three') currentTarget = iLoveYouVertices;
+            else if (currentHandState === 'four') currentTarget = byManzzVertices;
 
-                if (!isHandOpen) {
-                    // MODE SATURNUS: Partikel lari ke targetPositions (Lerp)
-                    posAttr.array[ix] += (targetPositions[ix] - posAttr.array[ix]) * 0.05;
-                    posAttr.array[iy] += (targetPositions[iy] - posAttr.array[iy]) * 0.05;
-                    posAttr.array[iz] += (targetPositions[iz] - posAttr.array[iz]) * 0.05;
+            for (let i = 0; i < particleCount; i++) {
+                const i3 = i * 3;
+                let tx, ty, tz;
+
+                if (currentTarget) {
+                    // Jika ada bentuk (hati/teks), target posisinya adalah bentuk tersebut
+                    tx = currentTarget[i].x;
+                    ty = currentTarget[i].y;
+                    tz = currentTarget[i].z;
+                } else if (currentHandState === 'closed') {
+                    // Menyusut: Target posisi adalah tengah (0,0,0)
+                    tx = 0; ty = 0; tz = 0;
                 } else {
-                    // MODE MENYEBAR: Partikel bergerak sesuai velocity
-                    posAttr.array[ix] += velocities[ix];
-                    posAttr.array[iy] += velocities[iy];
-                    posAttr.array[iz] += velocities[iz];
-
-                    // Reset jika terlalu jauh agar tidak hilang
-                    if (Math.abs(posAttr.array[ix]) > 15) posAttr.array[ix] *= -0.1;
+                    // Menyebar (Opened/None): Target posisi adalah posisi acak awal (paling menyebar)
+                    tx = positions[i3];
+                    ty = positions[i3 + 1];
+                    tz = positions[i3 + 2];
                 }
+
+                // Smooth animation (Lerp current towards target)
+                currentPositions[i3] = THREE.MathUtils.lerp(currentPositions[i3], tx, lerpFactor);
+                currentPositions[i3 + 1] = THREE.MathUtils.lerp(currentPositions[i3 + 1], ty, lerpFactor);
+                currentPositions[i3 + 2] = THREE.MathUtils.lerp(currentPositions[i3 + 2], tz, lerpFactor);
             }
 
-            posAttr.needsUpdate = true;
-            points.rotation.y += 0.002; // Rotasi planet pelan-pelan
+            geometry.attributes.position.needsUpdate = true; // Beri tahu GPU kalau posisi berubah
+            
+            // Beri sedikit rotasi otomatis biar efek 3D-nya kelihatan
+            points.rotation.y += 0.001; 
+            if (currentHandState === 'peace') points.rotation.y += 0.005; // Hati muter lebih cepet
+
             renderer.render(scene, camera);
         }
 
@@ -136,7 +224,6 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
-
     </script>
 </body>
 </html>
